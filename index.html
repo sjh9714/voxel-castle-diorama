@@ -1,0 +1,905 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Grand Twilight Voxel Castle Diorama</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg-top: #292337;
+      --bg-mid: #171924;
+      --bg-bottom: #090b12;
+      --panel: rgba(13, 16, 25, 0.7);
+      --panel-strong: rgba(18, 22, 32, 0.84);
+      --line: rgba(255, 255, 255, 0.12);
+      --text: #f5efe5;
+      --muted: rgba(245, 239, 229, 0.72);
+      --accent: #ffcc84;
+      --accent-cool: #a4bbff;
+      --shadow: rgba(0, 0, 0, 0.34);
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background:
+        radial-gradient(circle at 50% 10%, rgba(255, 190, 112, 0.18), transparent 24%),
+        radial-gradient(circle at 12% 18%, rgba(123, 98, 195, 0.18), transparent 28%),
+        linear-gradient(180deg, var(--bg-top) 0%, var(--bg-mid) 44%, var(--bg-bottom) 100%);
+      font-family: "Iowan Old Style", "Palatino Linotype", "Book Antiqua", Georgia, serif;
+    }
+
+    canvas {
+      display: block;
+      width: 100%;
+      height: 100%;
+    }
+
+    #loading,
+    #hud,
+    #legend {
+      position: fixed;
+      z-index: 10;
+      border: 1px solid var(--line);
+      background: var(--panel);
+      backdrop-filter: blur(14px);
+      box-shadow: 0 24px 56px var(--shadow);
+    }
+
+    #loading {
+      inset: 0;
+      z-index: 20;
+      display: grid;
+      place-items: center;
+      padding: 24px;
+      color: var(--text);
+      font-size: 14px;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      background:
+        radial-gradient(circle at 50% 25%, rgba(255, 177, 97, 0.18), transparent 18%),
+        linear-gradient(180deg, rgba(17, 16, 24, 0.94), rgba(8, 10, 16, 0.94));
+      transition: opacity 420ms ease;
+    }
+
+    #loading.hidden {
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    #hud {
+      top: 16px;
+      left: 16px;
+      max-width: min(440px, calc(100vw - 32px));
+      padding: 14px 16px;
+      border-radius: 16px;
+      color: var(--text);
+      line-height: 1.45;
+    }
+
+    #hud strong {
+      display: block;
+      margin-bottom: 7px;
+      font-size: 15px;
+      letter-spacing: 0.03em;
+    }
+
+    #hud span,
+    #legend {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    #legend {
+      right: 16px;
+      bottom: 16px;
+      max-width: min(360px, calc(100vw - 32px));
+      padding: 12px 14px;
+      border-radius: 16px;
+      line-height: 1.42;
+    }
+
+    #legend b {
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    @media (max-width: 720px) {
+      #hud,
+      #legend {
+        max-width: calc(100vw - 24px);
+      }
+
+      #hud {
+        top: 12px;
+        left: 12px;
+      }
+
+      #legend {
+        right: 12px;
+        bottom: 12px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div id="loading">Forging the cliffside castle at dusk…</div>
+  <div id="hud">
+    <strong>Grand Twilight Voxel Castle Diorama</strong>
+    Mouse drag: orbit · Wheel: zoom · WASD: pan · Shift: faster pan · R: reset view
+    <span>
+      A towering fantasy stronghold rises above a foggy abyss, with layered curtain walls, torch-lit gates, animated banners, and drifting birds over the bridge.
+    </span>
+  </div>
+  <div id="legend">
+    <b>Landmarks:</b> Bridge and gatehouse at the south edge, great keep at the center, rear crown towers overlooking the abyss, and cliff spires fading into the dusk fog below.
+  </div>
+
+  <script>
+    const loadingEl = document.getElementById('loading');
+    const fallbackMessage = 'Scene load issue detected. Open this file in a modern browser with WebGL and network access enabled.';
+
+    function showLoadIssue() {
+      if (loadingEl && !loadingEl.classList.contains('hidden')) {
+        loadingEl.textContent = fallbackMessage;
+      }
+    }
+
+    window.addEventListener('error', (event) => {
+      showLoadIssue();
+      console.error(event.error || event.message);
+    });
+
+    window.addEventListener('unhandledrejection', (event) => {
+      showLoadIssue();
+      console.error(event.reason);
+    });
+  </script>
+
+  <script type="importmap">
+    {
+      "imports": {
+        "three": "https://cdn.jsdelivr.net/npm/three@0.161.0/build/three.module.js",
+        "three/addons/": "https://cdn.jsdelivr.net/npm/three@0.161.0/examples/jsm/"
+      }
+    }
+  </script>
+
+  <script type="module">
+    import * as THREE from 'three';
+    import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+    const loadingEl = document.getElementById('loading');
+    const coarsePointer = window.matchMedia('(pointer: coarse)').matches;
+    const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+    const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+    renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarsePointer ? 1.25 : 1.75));
+    renderer.setSize(window.innerWidth, window.innerHeight);
+    renderer.outputColorSpace = THREE.SRGBColorSpace;
+    renderer.toneMapping = THREE.ACESFilmicToneMapping;
+    renderer.toneMappingExposure = 1.34;
+    renderer.shadowMap.enabled = true;
+    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    document.body.appendChild(renderer.domElement);
+
+    const scene = new THREE.Scene();
+    scene.background = new THREE.Color(0x2b2638);
+    scene.fog = new THREE.FogExp2(0x2a2233, 0.0051);
+
+    const camera = new THREE.PerspectiveCamera(29, window.innerWidth / window.innerHeight, 0.1, 420);
+    const defaultCameraPosition = new THREE.Vector3(88, 70, -96);
+    const defaultTarget = new THREE.Vector3(0, 18, 6);
+    camera.position.copy(defaultCameraPosition);
+
+    const controls = new OrbitControls(camera, renderer.domElement);
+    controls.target.copy(defaultTarget);
+    controls.enableDamping = true;
+    controls.dampingFactor = 0.06;
+    controls.enablePan = false;
+    controls.rotateSpeed = 0.66;
+    controls.zoomSpeed = 0.84;
+    controls.minDistance = 34;
+    controls.maxDistance = 176;
+    controls.minPolarAngle = 0.78;
+    controls.maxPolarAngle = 1.16;
+    controls.update();
+
+    const keys = new Set();
+    const clock = new THREE.Clock();
+    const animatables = [];
+    const emissivePulseMaterials = [];
+    const torchFlickerMaterials = [];
+    const glowSprites = [];
+    const tmpVecA = new THREE.Vector3();
+    const tmpVecB = new THREE.Vector3();
+    const tempObject = new THREE.Object3D();
+
+    const palette = {
+      abyss: 0x06070b,
+      cliff: 0x4e4658,
+      cliffDark: 0x342d3f,
+      cliffWarm: 0x64596d,
+      grass: 0x66775a,
+      moss: 0x54654b,
+      path: 0xb7a497,
+      stone: 0xd0c4bd,
+      stoneDark: 0xa49a94,
+      stoneWarm: 0xe0d2c5,
+      roof: 0x695a6b,
+      roofShadow: 0x5d5062,
+      bridgeWood: 0x88624e,
+      bridgeDark: 0x654537,
+      bannerCrimson: 0x8d2432,
+      bannerBlue: 0x355097,
+      bannerGold: 0xd9b05c,
+      bannerCream: 0xe5d9c2,
+      torchWood: 0x674634,
+      torchMetal: 0x99939d,
+      ember: 0xffb75e,
+      emberCore: 0xffe6a0,
+      windowGlow: 0xeecf92,
+      windowCore: 0xffefc7,
+      fog: 0xa495c2,
+      bird: 0x17161b,
+      black: 0x121217,
+    };
+
+    const unitBoxGeo = new THREE.BoxGeometry(1, 1, 1);
+    const materialCache = new Map();
+
+    function getMaterial(color, options = {}) {
+      const key = JSON.stringify({ color, ...options });
+      if (materialCache.has(key)) return materialCache.get(key);
+
+      const settings = {
+        color,
+        roughness: options.roughness ?? 0.88,
+        metalness: options.metalness ?? 0.04,
+        emissive: options.emissive ?? 0x000000,
+        emissiveIntensity: options.emissiveIntensity ?? 0,
+        transparent: options.transparent ?? false,
+        opacity: options.opacity ?? 1,
+        side: options.side ?? THREE.FrontSide,
+        depthWrite: options.depthWrite ?? true,
+      };
+
+      const material = new THREE.MeshStandardMaterial(settings);
+      materialCache.set(key, material);
+
+      if (settings.emissiveIntensity > 0) {
+        emissivePulseMaterials.push({
+          material,
+          base: settings.emissiveIntensity,
+          amplitude: options.pulseAmplitude ?? 0.12,
+          speed: options.pulseSpeed ?? 1.8,
+          offset: options.pulseOffset ?? emissivePulseMaterials.length * 0.33,
+        });
+      }
+
+      return material;
+    }
+
+    function addScaledBox(parent, {
+      x = 0,
+      y = 0,
+      z = 0,
+      sx = 1,
+      sy = 1,
+      sz = 1,
+      color = palette.stone,
+      material = null,
+      castShadow = true,
+      receiveShadow = true,
+    }) {
+      const mesh = new THREE.Mesh(unitBoxGeo, material || getMaterial(color));
+      mesh.position.set(x, y, z);
+      mesh.scale.set(sx, sy, sz);
+      mesh.castShadow = castShadow;
+      mesh.receiveShadow = receiveShadow;
+      parent.add(mesh);
+      return mesh;
+    }
+
+    class VoxelBuilder {
+      constructor() {
+        this.positionsByColor = new Map();
+      }
+
+      add(x, y, z, color) {
+        if (!this.positionsByColor.has(color)) this.positionsByColor.set(color, []);
+        const positions = this.positionsByColor.get(color);
+        positions.push(x, y, z);
+      }
+
+      box(cx, bottomY, cz, w, h, d, color, hollow = false) {
+        const x0 = -(w - 1) / 2;
+        const z0 = -(d - 1) / 2;
+        for (let ix = 0; ix < w; ix++) {
+          for (let iy = 0; iy < h; iy++) {
+            for (let iz = 0; iz < d; iz++) {
+              if (hollow) {
+                const onSurface = ix === 0 || ix === w - 1 || iy === 0 || iy === h - 1 || iz === 0 || iz === d - 1;
+                if (!onSurface) continue;
+              }
+              this.add(cx + x0 + ix, bottomY + iy, cz + z0 + iz, color);
+            }
+          }
+        }
+      }
+
+      shell(cx, bottomY, cz, w, h, d, color) {
+        const x0 = -(w - 1) / 2;
+        const z0 = -(d - 1) / 2;
+        for (let ix = 0; ix < w; ix++) {
+          for (let iy = 0; iy < h; iy++) {
+            for (let iz = 0; iz < d; iz++) {
+              const onSurface = ix === 0 || ix === w - 1 || iy === h - 1 || iz === 0 || iz === d - 1;
+              if (!onSurface) continue;
+              this.add(cx + x0 + ix, bottomY + iy, cz + z0 + iz, color);
+            }
+          }
+        }
+      }
+
+      lineX(cx, y, cz, length, color) {
+        const x0 = -(length - 1) / 2;
+        for (let i = 0; i < length; i++) this.add(cx + x0 + i, y, cz, color);
+      }
+
+      lineZ(cx, y, cz, length, color) {
+        const z0 = -(length - 1) / 2;
+        for (let i = 0; i < length; i++) this.add(cx, y, cz + z0 + i, color);
+      }
+
+      steppedRoof(cx, bottomY, cz, w, d, layers, colors) {
+        let width = w;
+        let depth = d;
+        let y = bottomY;
+        for (let layer = 0; layer < layers; layer++) {
+          const color = colors[layer % colors.length];
+          this.box(cx, y, cz, width, 1, depth, color, true);
+          width = Math.max(2, width - 2);
+          depth = Math.max(2, depth - 2);
+          y += 1;
+        }
+        this.box(cx, y, cz, Math.max(2, width), 1, Math.max(2, depth), colors[colors.length - 1], true);
+      }
+
+      finalize() {
+        const group = new THREE.Group();
+        for (const [color, positions] of this.positionsByColor.entries()) {
+          const materialOptions = color === palette.windowGlow
+            ? {
+                emissive: palette.windowCore,
+                emissiveIntensity: 1.26,
+                pulseAmplitude: 0.2,
+                pulseSpeed: 2.1,
+              }
+            : {};
+          const material = getMaterial(color, materialOptions);
+          const count = positions.length / 3;
+          const mesh = new THREE.InstancedMesh(unitBoxGeo, material, count);
+          mesh.castShadow = true;
+          mesh.receiveShadow = true;
+          for (let i = 0; i < count; i++) {
+            tempObject.position.set(positions[i * 3], positions[i * 3 + 1], positions[i * 3 + 2]);
+            tempObject.rotation.set(0, 0, 0);
+            tempObject.scale.set(1, 1, 1);
+            tempObject.updateMatrix();
+            mesh.setMatrixAt(i, tempObject.matrix);
+          }
+          mesh.instanceMatrix.needsUpdate = true;
+          group.add(mesh);
+        }
+        return group;
+      }
+    }
+
+    function smoothstep(edge0, edge1, value) {
+      const t = THREE.MathUtils.clamp((value - edge0) / (edge1 - edge0), 0, 1);
+      return t * t * (3 - 2 * t);
+    }
+
+    function addCrenellationsX(builder, xStart, xEnd, y, z, color) {
+      for (let x = xStart; x <= xEnd; x += 2) builder.box(x, y, z, 1, 2, 1, color);
+    }
+
+    function addCrenellationsZ(builder, x, y, zStart, zEnd, color) {
+      for (let z = zStart; z <= zEnd; z += 2) builder.box(x, y, z, 1, 2, 1, color);
+    }
+
+    function buildTower(builder, {
+      x,
+      z,
+      baseY = 8,
+      size = 7,
+      shaftH = 14,
+      roofLayers = 4,
+      bannerColor = palette.bannerCrimson,
+    }) {
+      const radius = Math.floor(size / 2);
+      builder.box(x, baseY, z, size + 2, 2, size + 2, palette.stoneDark);
+      builder.box(x, baseY + 2, z, size, shaftH, size, palette.stoneWarm, true);
+      builder.box(x - radius, baseY + 2, z - radius, 1, shaftH, 1, palette.stoneDark);
+      builder.box(x + radius, baseY + 2, z - radius, 1, shaftH, 1, palette.stoneDark);
+      builder.box(x - radius, baseY + 2, z + radius, 1, shaftH, 1, palette.stoneDark);
+      builder.box(x + radius, baseY + 2, z + radius, 1, shaftH, 1, palette.stoneDark);
+      builder.steppedRoof(x, baseY + shaftH + 2, z, size + 2, size + 2, roofLayers, [palette.roof, palette.roofShadow, palette.roof]);
+      builder.box(x, baseY + 6, z - radius, 2, 2, 1, palette.windowGlow);
+      builder.box(x, baseY + 9, z + radius, 2, 2, 1, palette.windowGlow);
+      builder.box(x - radius, baseY + 8, z, 1, 2, 2, palette.windowGlow);
+      builder.box(x + radius, baseY + 11, z, 1, 2, 2, palette.windowGlow);
+
+      if (bannerColor) {
+        builder.box(x, baseY + shaftH + roofLayers + 3, z, 1, 3, 1, palette.bannerGold);
+      }
+    }
+
+    function buildCliffs(builder) {
+      const bottom = -14;
+
+      function fillMass({ cx, cz, rx, rz, plateauHeight, plateauEdge }) {
+        const minX = Math.floor(cx - rx - 2);
+        const maxX = Math.ceil(cx + rx + 2);
+        const minZ = Math.floor(cz - rz - 2);
+        const maxZ = Math.ceil(cz + rz + 2);
+
+        for (let x = minX; x <= maxX; x++) {
+          for (let z = minZ; z <= maxZ; z++) {
+            const nx = Math.abs((x - cx) / rx);
+            const nz = Math.abs((z - cz) / rz);
+            const ridge = Math.max(nx, nz);
+            if (ridge > 1.18) continue;
+
+            const noise = Math.sin((x + 13) * 0.25) * 0.9 + Math.cos((z - 7) * 0.28) * 0.8 + Math.sin((x - z) * 0.16) * 0.5;
+            const plateauBlend = 1 - smoothstep(plateauEdge, 1.05, ridge);
+            let top = Math.round(bottom + 4 + plateauBlend * (plateauHeight - bottom - 4) + noise);
+            if (ridge < plateauEdge * 0.8) top = Math.round(plateauHeight + noise * 0.45);
+            if (top < bottom + 2) continue;
+
+            for (let y = bottom; y <= top; y++) {
+              let color = palette.cliffDark;
+              const nearSurface = top - y;
+              if (y === top) {
+                color = ridge < plateauEdge * 0.92 && top >= plateauHeight - 2 ? palette.grass : palette.moss;
+              } else if (nearSurface <= 2) {
+                color = (x + z + y) % 3 === 0 ? palette.cliffWarm : palette.cliff;
+              } else if (y < bottom + 3) {
+                color = palette.abyss;
+              }
+              builder.add(x, y, z, color);
+            }
+          }
+        }
+      }
+
+      fillMass({ cx: 0, cz: 14, rx: 40, rz: 25, plateauHeight: 8, plateauEdge: 0.74 });
+      fillMass({ cx: 0, cz: -30, rx: 16, rz: 8, plateauHeight: 6, plateauEdge: 0.68 });
+      fillMass({ cx: 0, cz: 38, rx: 22, rz: 7, plateauHeight: 7, plateauEdge: 0.72 });
+      fillMass({ cx: -34, cz: 8, rx: 10, rz: 14, plateauHeight: 5, plateauEdge: 0.66 });
+      fillMass({ cx: 35, cz: 12, rx: 8, rz: 13, plateauHeight: 5, plateauEdge: 0.66 });
+
+      const spires = [
+        { x: -10, z: -15, h: 7 },
+        { x: -2, z: -12, h: 9 },
+        { x: 6, z: -16, h: 6 },
+        { x: 14, z: -13, h: 8 },
+      ];
+
+      for (const { x, z, h } of spires) {
+        builder.box(x, -14, z, 5, h + 8, 5, palette.cliffDark, true);
+        builder.steppedRoof(x, -6 + h, z, 7, 7, 3, [palette.cliffWarm, palette.cliff]);
+      }
+
+      builder.box(0, 7, -3, 22, 1, 10, palette.path);
+      builder.box(0, 7, 10, 46, 1, 30, palette.path);
+      builder.box(0, 7, 26, 38, 1, 18, palette.path);
+    }
+
+    function buildBridge(builder) {
+      builder.box(0, 9, -15, 9, 1, 16, palette.bridgeWood);
+      builder.box(0, 8, -15, 5, 1, 16, palette.bridgeDark);
+
+      for (let z = -22; z <= -8; z += 3) {
+        builder.box(-4, 10, z, 1, 2, 1, palette.stoneWarm);
+        builder.box(4, 10, z, 1, 2, 1, palette.stoneWarm);
+        builder.box(0, 11, z, 9, 1, 1, palette.stoneDark);
+      }
+
+      for (let z = -19; z <= -11; z += 4) {
+        builder.box(-2, -2, z, 2, 10, 2, palette.stoneDark);
+        builder.box(2, -3, z + 1, 2, 11, 2, palette.stoneDark);
+      }
+
+      builder.box(0, 9, -24, 11, 1, 4, palette.path);
+      builder.box(0, 9, -7, 11, 1, 5, palette.path);
+    }
+
+    function buildCastle(builder) {
+      const wallBaseY = 8;
+      const wallHeight = 8;
+
+      builder.box(0, wallBaseY, 11, 52, 1, 34, palette.path);
+      builder.box(0, wallBaseY + 1, 11, 38, 1, 24, palette.path);
+      builder.box(0, wallBaseY + 2, 11, 30, 2, 18, palette.stoneDark);
+
+      builder.box(-16, wallBaseY, -6, 20, wallHeight, 2, palette.stone);
+      builder.box(16, wallBaseY, -6, 20, wallHeight, 2, palette.stone);
+      builder.box(0, wallBaseY + wallHeight, -6, 10, 2, 2, palette.stoneWarm);
+      builder.box(0, wallBaseY, -8, 12, 5, 2, palette.stoneDark);
+
+      builder.box(0, wallBaseY, 30, 58, wallHeight, 2, palette.stone);
+      builder.box(-29, wallBaseY, 12, 2, wallHeight, 38, palette.stone);
+      builder.box(29, wallBaseY, 12, 2, wallHeight, 38, palette.stone);
+
+      addCrenellationsX(builder, -25, -7, wallBaseY + wallHeight, -6, palette.stoneDark);
+      addCrenellationsX(builder, 7, 25, wallBaseY + wallHeight, -6, palette.stoneDark);
+      addCrenellationsX(builder, -28, 28, wallBaseY + wallHeight, 30, palette.stoneDark);
+      addCrenellationsZ(builder, -29, wallBaseY + wallHeight, -4, 28, palette.stoneDark);
+      addCrenellationsZ(builder, 29, wallBaseY + wallHeight, -4, 28, palette.stoneDark);
+
+      builder.box(0, wallBaseY + 1, 2, 10, 1, 16, palette.path);
+      builder.box(0, wallBaseY + 1, 18, 16, 1, 14, palette.path);
+
+      buildTower(builder, { x: -25, z: -5, shaftH: 14, size: 7, bannerColor: palette.bannerCrimson });
+      buildTower(builder, { x: 25, z: -5, shaftH: 14, size: 7, bannerColor: palette.bannerBlue });
+      buildTower(builder, { x: -28, z: 28, shaftH: 16, size: 8, bannerColor: palette.bannerCrimson });
+      buildTower(builder, { x: 28, z: 28, shaftH: 16, size: 8, bannerColor: palette.bannerBlue });
+      buildTower(builder, { x: -29, z: 12, shaftH: 11, size: 6, bannerColor: palette.bannerCream });
+      buildTower(builder, { x: 29, z: 12, shaftH: 11, size: 6, bannerColor: palette.bannerCream });
+      buildTower(builder, { x: -10, z: -4, shaftH: 18, size: 8, bannerColor: palette.bannerCrimson });
+      buildTower(builder, { x: 10, z: -4, shaftH: 18, size: 8, bannerColor: palette.bannerBlue });
+
+      builder.box(0, 11, 12, 28, 4, 22, palette.stoneDark);
+      builder.box(0, 15, 12, 20, 14, 16, palette.stoneWarm, true);
+      builder.box(-10, 15, 12, 1, 14, 1, palette.stoneDark);
+      builder.box(10, 15, 12, 1, 14, 1, palette.stoneDark);
+      builder.box(-10, 15, 4, 1, 14, 1, palette.stoneDark);
+      builder.box(10, 15, 4, 1, 14, 1, palette.stoneDark);
+      builder.box(-10, 15, 20, 1, 14, 1, palette.stoneDark);
+      builder.box(10, 15, 20, 1, 14, 1, palette.stoneDark);
+      builder.steppedRoof(0, 29, 12, 24, 20, 5, [palette.roof, palette.roofShadow, palette.roof, palette.roofShadow]);
+      builder.box(0, 35, 12, 2, 4, 2, palette.bannerGold);
+
+      builder.box(0, 16, 3, 8, 3, 3, palette.stoneDark);
+      builder.box(0, 19, 3, 12, 2, 4, palette.stoneWarm);
+      builder.box(0, 21, 3, 10, 1, 4, palette.roof);
+
+      buildTower(builder, { x: -16, z: 19, shaftH: 20, size: 7, bannerColor: palette.bannerCrimson });
+      buildTower(builder, { x: 16, z: 19, shaftH: 20, size: 7, bannerColor: palette.bannerBlue });
+      buildTower(builder, { x: 0, z: 30, shaftH: 22, size: 6, roofLayers: 5, bannerColor: palette.bannerGold });
+
+      for (let level = 0; level < 5; level++) {
+        builder.box(0, 12 + level, -1 + level * 2, 8 - level, 1, 2, palette.path);
+      }
+
+      const windowRows = [18, 22, 26];
+      for (const y of windowRows) {
+        builder.box(-6, y, 4, 2, 2, 1, palette.windowGlow);
+        builder.box(6, y, 4, 2, 2, 1, palette.windowGlow);
+        builder.box(-6, y, 20, 2, 2, 1, palette.windowGlow);
+        builder.box(6, y, 20, 2, 2, 1, palette.windowGlow);
+        builder.box(-9, y, 12, 1, 2, 2, palette.windowGlow);
+        builder.box(9, y, 12, 1, 2, 2, palette.windowGlow);
+      }
+
+      builder.box(-6, 12, -4, 3, 2, 2, palette.windowGlow);
+      builder.box(6, 12, -4, 3, 2, 2, palette.windowGlow);
+      builder.box(0, 13, 28, 3, 2, 1, palette.windowGlow);
+    }
+
+    function createGlowTexture() {
+      const canvas = document.createElement('canvas');
+      canvas.width = canvas.height = 128;
+      const ctx = canvas.getContext('2d');
+      const gradient = ctx.createRadialGradient(64, 64, 0, 64, 64, 64);
+      gradient.addColorStop(0, 'rgba(255, 245, 210, 1)');
+      gradient.addColorStop(0.3, 'rgba(255, 191, 104, 0.85)');
+      gradient.addColorStop(0.62, 'rgba(255, 141, 69, 0.28)');
+      gradient.addColorStop(1, 'rgba(255, 120, 30, 0)');
+      ctx.fillStyle = gradient;
+      ctx.fillRect(0, 0, 128, 128);
+      const texture = new THREE.CanvasTexture(canvas);
+      texture.colorSpace = THREE.SRGBColorSpace;
+      return texture;
+    }
+
+    function buildFlags(scene, animatables) {
+      const flagGroup = new THREE.Group();
+      scene.add(flagGroup);
+      const anchors = [
+        { x: -10, y: 30, z: -4, color: palette.bannerCrimson, dir: -1 },
+        { x: 10, y: 30, z: -4, color: palette.bannerBlue, dir: 1 },
+        { x: -16, y: 37, z: 19, color: palette.bannerCrimson, dir: -1 },
+        { x: 16, y: 37, z: 19, color: palette.bannerBlue, dir: 1 },
+        { x: 0, y: 40, z: 30, color: palette.bannerCream, dir: 1 },
+      ];
+
+      anchors.forEach((anchor, index) => {
+        const flag = new THREE.Group();
+        flag.position.set(anchor.x, anchor.y, anchor.z);
+        flagGroup.add(flag);
+
+        addScaledBox(flag, { x: 0, y: -2, z: 0, sx: 0.35, sy: 6, sz: 0.35, color: palette.bannerGold });
+
+        const segmentMaterial = getMaterial(anchor.color, { roughness: 0.9, metalness: 0.02 });
+        const segments = [];
+        for (let i = 0; i < 5; i++) {
+          const segment = addScaledBox(flag, {
+            x: anchor.dir * (0.8 + i * 0.84),
+            y: 0.9 - i * 0.05,
+            z: 0,
+            sx: 0.78,
+            sy: 0.42 - i * 0.02,
+            sz: 0.78,
+            material: segmentMaterial,
+          });
+          segments.push(segment);
+        }
+
+        animatables.push((elapsed) => {
+          const wave = elapsed * (prefersReducedMotion ? 0.6 : 2.3) + index * 0.9;
+          segments.forEach((segment, segmentIndex) => {
+            segment.position.z = Math.sin(wave - segmentIndex * 0.72) * 0.35;
+            segment.position.y = 0.9 - segmentIndex * 0.05 + Math.cos(wave * 0.8 - segmentIndex * 0.65) * 0.08;
+            segment.rotation.y = Math.sin(wave - segmentIndex * 0.52) * 0.25 * anchor.dir;
+          });
+        });
+      });
+    }
+
+    function buildTorches(scene, animatables) {
+      const torchGroup = new THREE.Group();
+      scene.add(torchGroup);
+
+      const glowTexture = createGlowTexture();
+      const glowMaterial = new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: 0xffc978,
+        transparent: true,
+        depthWrite: false,
+      });
+
+      const flameMaterial = getMaterial(palette.ember, {
+        emissive: palette.emberCore,
+        emissiveIntensity: 1.34,
+        pulseAmplitude: 0.18,
+        pulseSpeed: 3.1,
+      });
+      torchFlickerMaterials.push(flameMaterial);
+
+      const torchPositions = [
+        { x: -4, y: 11, z: -20 },
+        { x: 4, y: 11, z: -20 },
+        { x: -4, y: 11, z: -12 },
+        { x: 4, y: 11, z: -12 },
+        { x: -7, y: 14, z: -5 },
+        { x: 7, y: 14, z: -5 },
+        { x: -12, y: 18, z: 5 },
+        { x: 12, y: 18, z: 5 },
+      ];
+
+      torchPositions.forEach((position, index) => {
+        const torch = new THREE.Group();
+        torch.position.set(position.x, position.y, position.z);
+        torchGroup.add(torch);
+
+        addScaledBox(torch, { x: 0, y: -1.8, z: 0, sx: 0.35, sy: 3.6, sz: 0.35, color: palette.torchWood });
+        addScaledBox(torch, { x: 0, y: 0.15, z: 0, sx: 0.65, sy: 0.25, sz: 0.65, color: palette.torchMetal });
+        const flame = addScaledBox(torch, { x: 0, y: 0.9, z: 0, sx: 0.55, sy: 0.9, sz: 0.55, material: flameMaterial });
+        flame.castShadow = false;
+
+        const sprite = new THREE.Sprite(glowMaterial.clone());
+        sprite.position.set(0, 0.95, 0);
+        sprite.scale.set(3.6, 3.6, 1);
+        torch.add(sprite);
+        glowSprites.push(sprite);
+
+        const light = new THREE.PointLight(0xffbf72, 1.48, 22, 2.0);
+        light.castShadow = false;
+        light.position.set(0, 0.8, 0);
+        torch.add(light);
+
+        animatables.push((elapsed) => {
+          const flicker = 0.8 + Math.sin(elapsed * 6 + index * 1.1) * 0.16 + Math.cos(elapsed * 9 + index * 0.7) * 0.08;
+          flame.scale.y = 0.78 + flicker * 0.2;
+          flame.scale.x = 0.46 + flicker * 0.08;
+          flame.scale.z = 0.46 + flicker * 0.08;
+          sprite.scale.setScalar(3.2 + flicker * 0.55);
+          light.intensity = 0.85 + flicker * 0.55;
+        });
+      });
+    }
+
+    function buildBirds(scene, animatables) {
+      const flock = new THREE.Group();
+      scene.add(flock);
+
+      for (let i = 0; i < 4; i++) {
+        const bird = new THREE.Group();
+        const body = addScaledBox(bird, { sx: 0.28, sy: 0.18, sz: 0.7, color: palette.bird, castShadow: false, receiveShadow: false });
+        const leftWing = addScaledBox(bird, { x: -0.28, sx: 0.38, sy: 0.06, sz: 0.4, color: palette.bird, castShadow: false, receiveShadow: false });
+        const rightWing = addScaledBox(bird, { x: 0.28, sx: 0.38, sy: 0.06, sz: 0.4, color: palette.bird, castShadow: false, receiveShadow: false });
+        flock.add(bird);
+
+        animatables.push((elapsed) => {
+          const orbit = elapsed * (prefersReducedMotion ? 0.14 : 0.25) + i * 1.4;
+          const radius = 18 + i * 2.5;
+          bird.position.set(Math.cos(orbit) * radius, 34 + Math.sin(orbit * 1.4) * 2.2 + i * 1.2, 14 + Math.sin(orbit) * radius * 0.5);
+          bird.rotation.y = -orbit + Math.PI * 0.5;
+          const flap = Math.sin(elapsed * 12 + i * 0.9) * 0.55;
+          leftWing.rotation.z = flap;
+          rightWing.rotation.z = -flap;
+          body.rotation.z = flap * 0.08;
+        });
+      }
+    }
+
+    function buildAtmosphere(scene, animatables) {
+      const atmosphere = new THREE.Group();
+      scene.add(atmosphere);
+
+      const hemi = new THREE.HemisphereLight(0xa6b4e6, 0x24181f, 1.18);
+      scene.add(hemi);
+
+      const key = new THREE.DirectionalLight(0xffd291, 2.6);
+      key.position.set(-46, 58, 22);
+      key.castShadow = true;
+      key.shadow.mapSize.set(2048, 2048);
+      key.shadow.camera.near = 1;
+      key.shadow.camera.far = 180;
+      key.shadow.camera.left = -70;
+      key.shadow.camera.right = 70;
+      key.shadow.camera.top = 70;
+      key.shadow.camera.bottom = -70;
+      key.shadow.bias = -0.0003;
+      scene.add(key);
+
+      const fill = new THREE.DirectionalLight(0x97aeeb, 1.08);
+      fill.position.set(30, 24, -28);
+      scene.add(fill);
+
+      const warmLift = new THREE.DirectionalLight(0xffdcb0, 1.08);
+      warmLift.position.set(10, 18, 44);
+      warmLift.castShadow = false;
+      scene.add(warmLift);
+
+      const rimLight = new THREE.DirectionalLight(0x9cb3ff, 0.86);
+      rimLight.position.set(-8, 34, -38);
+      rimLight.castShadow = false;
+      scene.add(rimLight);
+
+      const ambient = new THREE.AmbientLight(0x2e2d3f, 0.78);
+      scene.add(ambient);
+
+      const glowTexture = createGlowTexture();
+      const sunSprite = new THREE.Sprite(new THREE.SpriteMaterial({
+        map: glowTexture,
+        color: 0xffb96f,
+        transparent: true,
+        depthWrite: false,
+      }));
+      sunSprite.position.set(-82, 66, -84);
+      sunSprite.scale.set(34, 34, 1);
+      atmosphere.add(sunSprite);
+
+      const fogPlaneMaterial = new THREE.MeshBasicMaterial({
+        color: palette.fog,
+        transparent: true,
+        opacity: 0.05,
+        depthWrite: false,
+      });
+      for (let i = 0; i < 3; i++) {
+        const plane = new THREE.Mesh(new THREE.PlaneGeometry(28, 10), fogPlaneMaterial.clone());
+        plane.rotation.x = -Math.PI * 0.5;
+        plane.position.set(-12 + i * 10, -5.5 + i * 0.6, -28 - i * 6);
+        atmosphere.add(plane);
+        animatables.push((elapsed) => {
+          plane.position.x = -12 + i * 10 + Math.sin(elapsed * 0.22 + i) * 1.8;
+          plane.material.opacity = 0.038 + Math.sin(elapsed * 0.26 + i * 1.1) * 0.01;
+        });
+      }
+    }
+
+    function buildScene() {
+      const builder = new VoxelBuilder();
+      buildCliffs(builder);
+      buildBridge(builder);
+      buildCastle(builder);
+
+      const world = builder.finalize();
+      scene.add(world);
+
+      buildFlags(scene, animatables);
+      buildTorches(scene, animatables);
+      buildBirds(scene, animatables);
+      buildAtmosphere(scene, animatables);
+
+      const renderTarget = new THREE.Vector3(defaultTarget.x, defaultTarget.y, defaultTarget.z);
+      camera.lookAt(renderTarget);
+      controls.update();
+    }
+
+    function updateKeyboardPan(dt) {
+      tmpVecA.set(0, 0, 0);
+      if (keys.has('KeyW')) tmpVecA.z += 1;
+      if (keys.has('KeyS')) tmpVecA.z -= 1;
+      if (keys.has('KeyA')) tmpVecA.x -= 1;
+      if (keys.has('KeyD')) tmpVecA.x += 1;
+      if (tmpVecA.lengthSq() === 0) return;
+
+      const speedMultiplier = keys.has('ShiftLeft') || keys.has('ShiftRight') ? 1.9 : 1;
+      const distanceFactor = Math.max(0.8, camera.position.distanceTo(controls.target) * 0.05);
+      const speed = dt * 15 * speedMultiplier * distanceFactor;
+
+      camera.getWorldDirection(tmpVecB);
+      tmpVecB.y = 0;
+      tmpVecB.normalize();
+      const right = new THREE.Vector3().crossVectors(tmpVecB, new THREE.Vector3(0, 1, 0)).normalize();
+
+      const move = new THREE.Vector3();
+      move.addScaledVector(tmpVecB, tmpVecA.z * speed);
+      move.addScaledVector(right, tmpVecA.x * speed);
+      camera.position.add(move);
+      controls.target.add(move);
+    }
+
+    function resetView() {
+      camera.position.copy(defaultCameraPosition);
+      controls.target.copy(defaultTarget);
+      controls.update();
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      const dt = Math.min(clock.getDelta(), 0.05);
+      const elapsed = clock.elapsedTime;
+
+      updateKeyboardPan(dt);
+      controls.update();
+
+      emissivePulseMaterials.forEach((entry, index) => {
+        entry.material.emissiveIntensity = entry.base + Math.sin(elapsed * entry.speed + entry.offset + index * 0.19) * entry.amplitude;
+      });
+
+      glowSprites.forEach((sprite, index) => {
+        sprite.material.opacity = 0.68 + Math.sin(elapsed * 2.5 + index * 0.7) * 0.08;
+      });
+
+      animatables.forEach((update) => update(elapsed, dt));
+      renderer.render(scene, camera);
+    }
+
+    function onResize() {
+      camera.aspect = window.innerWidth / window.innerHeight;
+      camera.updateProjectionMatrix();
+      renderer.setPixelRatio(Math.min(window.devicePixelRatio, coarsePointer ? 1.25 : 1.75));
+      renderer.setSize(window.innerWidth, window.innerHeight);
+    }
+
+    window.addEventListener('keydown', (event) => {
+      keys.add(event.code);
+      if (event.code === 'KeyR') resetView();
+    });
+
+    window.addEventListener('keyup', (event) => {
+      keys.delete(event.code);
+    });
+
+    window.addEventListener('resize', onResize);
+
+    buildScene();
+    animate();
+
+    loadingEl.classList.add('hidden');
+  </script>
+</body>
+</html>
