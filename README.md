@@ -1,5 +1,7 @@
 # Voxel Castle Diorama
 
+![Voxel Castle Diorama 대표 이미지](image/castle-overview.png)
+
 절벽 위에 세운 복셀 성을 Three.js로 구현한 3D 디오라마입니다.  
 하나의 `index.html`만으로 실행되며, 별도 빌드 과정 없이 브라우저에서 바로 확인할 수 있습니다.
 

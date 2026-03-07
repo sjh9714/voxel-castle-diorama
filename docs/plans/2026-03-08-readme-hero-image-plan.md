@@ -2,9 +2,9 @@
 
 > **For Claude:** REQUIRED SUB-SKILL: Use superpowers:executing-plans to implement this plan task-by-task.
 
-**Goal:** Add a hero screenshot to the top of the Korean portfolio README using a clean tracked asset path.
+**Goal:** Add a hero screenshot to the top of the Korean portfolio README using a clean tracked asset path while keeping the original local screenshot out of git.
 
-**Architecture:** Keep the existing README structure and insert a single representative image directly under the project title. Copy the screenshot to a stable ASCII filename inside the tracked `image/` directory so the Markdown link renders reliably on GitHub.
+**Architecture:** Keep the existing README structure and insert a single representative image directly under the project title. Copy the screenshot to a stable ASCII filename inside the tracked `image/` directory so the Markdown link renders reliably on GitHub, and ignore the original screenshot filename to avoid leaving the repo dirty.
 
 **Tech Stack:** Markdown, Git, GitHub
 
@@ -40,6 +40,7 @@ Expected: file metadata prints with a non-zero size.
 
 **Files:**
 - Modify: `/Users/sungjh/castle/README.md`
+- Create: `/Users/sungjh/castle/.gitignore`
 
 **Step 1: Insert the hero image**
 
@@ -49,7 +50,15 @@ Add a Markdown image line directly below the title:
 ![Voxel Castle Diorama 대표 이미지](image/castle-overview.png)
 ```
 
-**Step 2: Keep the copy concise**
+**Step 2: Ignore the original screenshot**
+
+Add this line to `/Users/sungjh/castle/.gitignore`:
+
+```gitignore
+image/Screenshot 2026-03-08 at 2.23.51 AM.png
+```
+
+**Step 3: Keep the copy concise**
 
 Preserve the existing portfolio-oriented structure and only make small text adjustments if needed.
 
@@ -58,6 +67,7 @@ Preserve the existing portfolio-oriented structure and only make small text adju
 **Files:**
 - Modify: `/Users/sungjh/castle/README.md`
 - Create: `/Users/sungjh/castle/image/castle-overview.png`
+- Modify: `/Users/sungjh/castle/.gitignore`
 
 **Step 1: Review the README output**
 
@@ -77,14 +87,14 @@ Run:
 git status --short --branch
 ```
 
-Expected: only the new image, README update, and planning docs appear.
+Expected: only the new image, `.gitignore`, README update, and planning docs appear.
 
 **Step 3: Commit**
 
 Run:
 
 ```bash
-git add README.md image/castle-overview.png docs/plans/2026-03-08-readme-hero-image-design.md docs/plans/2026-03-08-readme-hero-image-plan.md
+git add README.md .gitignore image/castle-overview.png docs/plans/2026-03-08-readme-hero-image-design.md docs/plans/2026-03-08-readme-hero-image-plan.md
 git commit -m "docs: add readme hero image"
 ```
 
