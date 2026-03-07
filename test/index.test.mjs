@@ -140,7 +140,8 @@ test('surfaces the GitHub Pages live demo URL in the portfolio README', async ()
   const readme = await readReadme();
 
   assert.match(readme, /https:\/\/jinhyuk9714\.github\.io\/voxel-castle-diorama\//);
-  assert.match(readme, /데모:/);
+  assert.match(readme, /## 소개\s+데모:\s+\[jinhyuk9714\.github\.io\/voxel-castle-diorama\]\(https:\/\/jinhyuk9714\.github\.io\/voxel-castle-diorama\/\)/);
+  assert.doesNotMatch(readme, /\n- 데모:/);
 });
 
 test('includes a no-Jekyll marker for root-based static deployment', async () => {
