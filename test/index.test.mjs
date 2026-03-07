@@ -1,11 +1,17 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { access, readFile } from 'node:fs/promises';
 
 const htmlPath = new URL('../index.html', import.meta.url);
+const readmePath = new URL('../README.md', import.meta.url);
+const noJekyllPath = new URL('../.nojekyll', import.meta.url);
 
 async function readHtml() {
   return readFile(htmlPath, 'utf8');
+}
+
+async function readReadme() {
+  return readFile(readmePath, 'utf8');
 }
 
 function readNumberLiteral(html, pattern) {
@@ -128,4 +134,15 @@ test('keeps the dusk lighting profile bright enough to read the castle silhouett
   assert.ok(rimIntensity >= 0.78, `expected rim light, got ${rimIntensity}`);
   assert.ok(torchIntensity >= 1.35, `expected stronger torch light, got ${torchIntensity}`);
   assert.ok(torchDistance >= 19, `expected wider torch light radius, got ${torchDistance}`);
+});
+
+test('surfaces the GitHub Pages live demo URL in the portfolio README', async () => {
+  const readme = await readReadme();
+
+  assert.match(readme, /https:\/\/jinhyuk9714\.github\.io\/voxel-castle-diorama\//);
+  assert.match(readme, /데모:/);
+});
+
+test('includes a no-Jekyll marker for root-based static deployment', async () => {
+  await access(noJekyllPath);
 });
